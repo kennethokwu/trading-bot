@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbitrage Scanner</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;
+    --status-good:    #0ca30c;
+    --status-critical:#d03b3b;
+    --delta-good:     #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --delta-good:     #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --delta-good:     #0ca30c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 20px 16px 40px;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 16px; font-size: 13px; }
+  .banner {
+    display: none; margin: 0 0 16px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1);
+    color: var(--text-secondary); font-size: 13px;
+  }
+  .banner.show { display: block; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .tile .label { color: var(--text-secondary); font-size: 12px; margin-bottom: 4px; }
+  .tile .value { font-size: 24px; font-weight: 650; }
+  .tile .detail { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+  .value.pos { color: var(--delta-good); }
+  .value.neg { color: var(--status-critical); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-secondary);
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .chip.up .dot { background: var(--status-good); }
+  .chip.down .dot { background: var(--status-critical); }
+
+  section {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  section h2 { font-size: 13px; margin: 0 0 10px; color: var(--text-secondary); font-weight: 600; }
+
+  .chart-wrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font-size: 12px;
+    color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    white-space: nowrap; z-index: 2;
+  }
+  .tooltip .t { color: var(--text-muted); }
+  .empty { color: var(--text-muted); font-size: 13px; padding: 8px 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px;
+       border-bottom: 1px solid var(--baseline); padding: 4px 8px 6px; }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--grid); color: var(--text-primary); }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dim { color: var(--text-secondary); }
+  td .pos { color: var(--delta-good); }
+  .stale { color: var(--text-muted); }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Arbitrage Scanner</h1>
+  <p class="subtitle">Cross-exchange &amp; triangular opportunity detection · paper trading only, no real orders</p>
+  <div id="mockBanner" class="banner">Mock mode — prices are synthetic. Opportunities and P&amp;L shown here demonstrate the pipeline, not a real edge.</div>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Paper P&amp;L</div><div class="value" id="pnl">–</div><div class="detail" id="pnlDetail"></div></div>
+    <div class="tile"><div class="label">Opportunities seen</div><div class="value" id="oppCount">–</div><div class="detail">net edge &gt; 0 after fees</div></div>
+    <div class="tile"><div class="label">Paper trades</div><div class="value" id="tradeCount">–</div><div class="detail" id="tradeDetail"></div></div>
+    <div class="tile"><div class="label">Quotes / sec</div><div class="value" id="qps">–</div><div class="detail" id="qTotal"></div></div>
+    <div class="tile"><div class="label">Uptime</div><div class="value" id="uptime">–</div><div class="detail" id="startedAt"></div></div>
+  </div>
+
+  <div class="chips" id="feedChips"></div>
+
+  <section>
+    <h2>Cumulative paper P&amp;L (USD)</h2>
+    <div class="chart-wrap">
+      <svg id="pnlChart" viewBox="0 0 960 240" role="img" aria-label="Cumulative paper profit and loss over time"></svg>
+      <div class="tooltip" id="pnlTip"></div>
+      <div class="empty" id="pnlEmpty">No paper trades yet — the chart appears after the first simulated fill.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Live top-of-book</h2>
+    <div class="scroll"><table id="quotesTable">
+      <thead><tr><th>Exchange</th><th>Market</th><th class="num">Bid</th><th class="num">Ask</th><th class="num">Spread</th><th class="num">Age</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Recent opportunities</h2>
+    <div class="scroll"><table id="oppsTable">
+      <thead><tr><th>Time</th><th>Strategy</th><th>Trade</th><th class="num">Gross edge</th><th class="num">Net edge</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="oppsEmpty">Nothing yet — an opportunity is logged when the spread beats fees + slippage buffer.</div>
+  </section>
+
+  <section>
+    <h2>Recent paper trades</h2>
+    <div class="scroll"><table id="tradesTable">
+      <thead><tr><th>Time</th><th>Strategy</th><th>Trade</th><th class="num">Notional</th><th class="num">Net edge</th><th class="num">Profit</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="tradesEmpty">No simulated fills yet.</div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const fmtUsd = (v) => (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+const fmtBps = (v) => (v * 10000).toFixed(1) + ' bps'
+const fmtTime = (ts) => new Date(ts).toLocaleTimeString()
+const fmtPx = (v) => v >= 100 ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v.toPrecision(6)
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+function fmtUptime(ms) {
+  const s = Math.floor(ms / 1000)
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60)
+  if (d) return `${d}d ${h}h`
+  if (h) return `${h}h ${m}m`
+  return `${m}m ${s % 60}s`
+}
+
+let pnlPoints = [] // scaled points for hover lookup
+
+function drawPnl(series) {
+  const svg = $('pnlChart'), tipEl = $('pnlTip')
+  const has = series.length >= 2
+  $('pnlEmpty').style.display = has ? 'none' : 'block'
+  svg.style.display = has ? 'block' : 'none'
+  if (!has) return
+
+  const W = 960, H = 240, m = { t: 16, r: 84, b: 26, l: 56 }
+  const xs = series.map((p) => p.ts), ys = series.map((p) => p.pnl)
+  const x0 = Math.min(...xs), x1 = Math.max(...xs)
+  let y0 = Math.min(0, ...ys), y1 = Math.max(0, ...ys)
+  if (y1 - y0 < 1e-9) { y1 += 1; y0 -= 1 }
+  const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad
+  const X = (t) => m.l + ((t - x0) / (x1 - x0 || 1)) * (W - m.l - m.r)
+  const Y = (v) => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b)
+
+  pnlPoints = series.map((p) => ({ x: X(p.ts), y: Y(p.pnl), ts: p.ts, pnl: p.pnl }))
+
+  // 4 horizontal gridlines + labeled ticks, hairline weight.
+  let out = ''
+  const ticks = 4
+  for (let i = 0; i <= ticks; i++) {
+    const v = y0 + ((y1 - y0) * i) / ticks
+    const y = Y(v)
+    out += `<line x1="${m.l}" y1="${y}" x2="${W - m.r}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`
+    out += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)" font-variant-numeric="tabular-nums">${fmtUsd(v)}</text>`
+  }
+  // zero baseline emphasized when in range
+  if (y0 < 0 && y1 > 0) {
+    out += `<line x1="${m.l}" y1="${Y(0)}" x2="${W - m.r}" y2="${Y(0)}" stroke="var(--baseline)" stroke-width="1"/>`
+  }
+  // x-axis time labels: first & last
+  out += `<text x="${m.l}" y="${H - 6}" font-size="11" fill="var(--text-muted)">${fmtTime(x0)}</text>`
+  out += `<text x="${W - m.r}" y="${H - 6}" text-anchor="end" font-size="11" fill="var(--text-muted)">${fmtTime(x1)}</text>`
+
+  // the single P&L series: 2px line, direct label at last point
+  const d = pnlPoints.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('')
+  out += `<path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round"/>`
+  const last = pnlPoints[pnlPoints.length - 1]
+  out += `<circle cx="${last.x}" cy="${last.y}" r="3.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`
+  out += `<text x="${last.x + 10}" y="${last.y + 4}" font-size="12" font-weight="600" fill="var(--text-primary)" font-variant-numeric="tabular-nums">${fmtUsd(last.pnl)}</text>`
+
+  // crosshair layer (populated on hover)
+  out += `<g id="xhair"></g><rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" id="hitArea"/>`
+  svg.innerHTML = out
+
+  const hit = svg.querySelector('#hitArea'), xg = svg.querySelector('#xhair')
+  hit.addEventListener('mousemove', (ev) => {
+    const rect = svg.getBoundingClientRect()
+    const mx = ((ev.clientX - rect.left) / rect.width) * W
+    let best = pnlPoints[0]
+    for (const p of pnlPoints) if (Math.abs(p.x - mx) < Math.abs(best.x - mx)) best = p
+    xg.innerHTML =
+      `<line x1="${best.x}" y1="${m.t}" x2="${best.x}" y2="${H - m.b}" stroke="var(--baseline)" stroke-width="1"/>` +
+      `<circle cx="${best.x}" cy="${best.y}" r="4" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`
+    tipEl.style.display = 'block'
+    tipEl.innerHTML = `<span class="t">${fmtTime(best.ts)}</span><br><strong>${fmtUsd(best.pnl)}</strong>`
+    const wrap = svg.parentElement.getBoundingClientRect()
+    let left = ev.clientX - wrap.left + 14
+    if (left + tipEl.offsetWidth > wrap.width - 8) left = ev.clientX - wrap.left - tipEl.offsetWidth - 14
+    tipEl.style.left = left + 'px'
+    tipEl.style.top = Math.max(0, ev.clientY - wrap.top - 40) + 'px'
+  })
+  hit.addEventListener('mouseleave', () => { xg.innerHTML = ''; tipEl.style.display = 'none' })
+}
+
+function render(s) {
+  $('mockBanner').classList.toggle('show', s.mock)
+
+  const pnlEl = $('pnl')
+  pnlEl.textContent = fmtUsd(s.pnl)
+  pnlEl.className = 'value ' + (s.pnl > 0 ? 'pos' : s.pnl < 0 ? 'neg' : '')
+  $('pnlDetail').textContent = `simulated, $${s.config.tradeNotional} per trade`
+  $('oppCount').textContent = s.opportunityCount.toLocaleString()
+  $('tradeCount').textContent = s.tradeCount.toLocaleString()
+  $('tradeDetail').textContent = `min edge ${fmtBps(s.config.minNetEdgeToTrade)}`
+  $('qps').textContent = s.quotesPerSec.toLocaleString()
+  $('qTotal').textContent = `${s.totalQuotes.toLocaleString()} total`
+  $('uptime').textContent = fmtUptime(s.now - s.startedAt)
+  $('startedAt').textContent = 'since ' + fmtTime(s.startedAt)
+
+  $('feedChips').innerHTML = s.feeds.map((f) => {
+    const up = f.connected
+    return `<span class="chip ${up ? 'up' : 'down'}"><span class="dot"></span>${esc(f.feed)} · ${up ? 'connected' : 'disconnected'}${f.mock ? ' (mock)' : ''}</span>`
+  }).join('')
+
+  $('quotesTable').querySelector('tbody').innerHTML = s.quotes.map((q) => {
+    const spread = (q.ask - q.bid) / q.ask
+    const age = Math.round((s.now - q.ts) / 1000)
+    return `<tr class="${q.stale ? 'stale' : ''}"><td class="dim">${esc(q.exchange)}</td><td>${esc(q.symbol)}</td>` +
+      `<td class="num">${fmtPx(q.bid)}</td><td class="num">${fmtPx(q.ask)}</td>` +
+      `<td class="num">${fmtBps(spread)}</td><td class="num">${q.stale ? 'stale' : age + 's'}</td></tr>`
+  }).join('')
+
+  $('oppsEmpty').style.display = s.opportunities.length ? 'none' : 'block'
+  $('oppsTable').querySelector('tbody').innerHTML = s.opportunities.map((o) =>
+    `<tr><td class="dim num">${fmtTime(o.ts)}</td><td class="dim">${esc(o.strategy)}</td>` +
+    `<td>${esc(o.description)}${o.note ? ` <span class="stale">· ${esc(o.note)}</span>` : ''}</td>` +
+    `<td class="num">${fmtBps(o.grossEdge)}</td><td class="num"><span class="pos">${fmtBps(o.netEdge)}</span></td></tr>`
+  ).join('')
+
+  $('tradesEmpty').style.display = s.trades.length ? 'none' : 'block'
+  $('tradesTable').querySelector('tbody').innerHTML = s.trades.map((t) =>
+    `<tr><td class="dim num">${fmtTime(t.ts)}</td><td class="dim">${esc(t.strategy)}</td>` +
+    `<td>${esc(t.description)}</td><td class="num">${fmtUsd(t.notional)}</td>` +
+    `<td class="num">${fmtBps(t.netEdge)}</td><td class="num"><span class="${t.profit >= 0 ? 'pos' : ''}">${fmtUsd(t.profit)}</span></td></tr>`
+  ).join('')
+
+  drawPnl(s.pnlSeries)
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/api/state')
+    render(await res.json())
+  } catch (e) { /* server restarting; keep polling */ }
+}
+poll()
+setInterval(poll, 2000)
+</script>
+</body>
+</html>
