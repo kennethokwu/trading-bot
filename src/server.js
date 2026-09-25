@@ -5,7 +5,7 @@ import { config } from './config.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export function createServer({ book, store, trader, feeds, startedAt }) {
+export function createServer({ book, store, trader, feeds, funding, startedAt }) {
   const app = express()
   app.use(express.static(path.join(__dirname, '..', 'public')))
 
@@ -35,11 +35,13 @@ export function createServer({ book, store, trader, feeds, startedAt }) {
       tradeCount: trader.tradeCount,
       pnl: trader.pnl,
       pnlSeries: store.pnlSeries,
+      funding: funding.snapshot(),
       config: {
         fees: config.fees,
         slippageBufferPerLeg: config.slippageBufferPerLeg,
         minNetEdgeToTrade: config.minNetEdgeToTrade,
         tradeNotional: config.tradeNotional,
+        carryMinApr: config.funding.minAnnualizedToEnter,
       },
     })
   })

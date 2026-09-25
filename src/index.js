@@ -8,6 +8,8 @@ import { BinanceFeed } from './feeds/binance.js'
 import { CoinbaseFeed } from './feeds/coinbase.js'
 import { KrakenFeed } from './feeds/kraken.js'
 import { MockFeed } from './feeds/mock.js'
+import { FundingMonitor } from './funding/monitor.js'
+import { fetchBinanceFunding, fetchBybitFunding, mockFundingFetcher } from './funding/sources.js'
 import { createServer } from './server.js'
 
 const startedAt = Date.now()
@@ -48,7 +50,12 @@ for (const feed of feeds) {
   feed.start()
 }
 
-const app = createServer({ book, store, trader, feeds, startedAt })
+const funding = new FundingMonitor(
+  config.mockFeeds ? [mockFundingFetcher()] : [fetchBinanceFunding, fetchBybitFunding]
+)
+funding.start()
+
+const app = createServer({ book, store, trader, feeds, funding, startedAt })
 app.listen(config.port, () =>
   console.log(`Dashboard on http://localhost:${config.port} (paper trading only — no real orders)`)
 )
@@ -65,6 +72,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     console.log(`\n${sig} received, shutting down.`)
     for (const feed of feeds) feed.stop()
+    funding.stop()
     store.close()
     process.exit(0)
   })

@@ -23,6 +23,19 @@ real-world risk. The simulation assumes inventory is pre-funded on every venue
 USDT and the reverse direction on every relevant tick, with taker fees applied
 to all three legs.
 
+**Funding-rate carry (the around-the-clock one).** Perpetual futures pay
+funding every interval, continuously, around the clock. Holding spot and
+shorting the perp collects that funding while staying price-neutral — the
+closest thing crypto has to a persistent, cumulative income stream, and how
+most market-neutral crypto funds actually earn. The monitor polls funding
+rates across every USDT perp on Binance and Bybit, ranks them by annualized
+yield, and simulates one carry position at a time: it enters when the best
+positive funding clears a configurable APR threshold, charges realistic
+entry/exit costs up front, accrues funding pro-rata, and exits when funding
+decays below the exit threshold. Not risk-free — funding can flip negative
+(the exit rule handles that) and you carry exchange/counterparty risk — but
+it is a structural edge rather than a latency race.
+
 ## Running it
 
 ```bash

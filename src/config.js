@@ -73,6 +73,23 @@ export const config = {
   // USDT -> BTC -> {base} -> USDT and the reverse.
   triangularBases: ['ETH', 'SOL', 'XRP'],
 
+  // Funding-rate carry monitor: long spot + short perpetual, collecting the
+  // funding payments perps pay around the clock. This is the "continuous
+  // cumulative profit" strategy — slow, steady accrual rather than latency
+  // races. The simulator holds at most one paper position at a time.
+  funding: {
+    pollIntervalMs: num(process.env.FUNDING_POLL_MS, 60_000),
+    carryNotional: num(process.env.CARRY_NOTIONAL, 10_000),
+    // Round-trip cost of entering + exiting (spot buy/sell + perp open/close),
+    // charged up front — the position starts underwater and earns it back.
+    entryCostPct: num(process.env.CARRY_ENTRY_COST, 0.002), // 0.20%
+    minAnnualizedToEnter: num(process.env.CARRY_MIN_APR, 0.08), // 8% APR
+    exitAnnualizedBelow: num(process.env.CARRY_EXIT_APR, 0),
+    // Rates beyond this per interval are usually data glitches or death-spiral
+    // alts; ignore them.
+    maxAbsRatePerInterval: num(process.env.CARRY_MAX_RATE, 0.005),
+  },
+
   // Persist opportunities and paper trades as JSONL under ./data
   dataDir: process.env.DATA_DIR || 'data',
 }

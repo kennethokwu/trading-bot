@@ -121,11 +121,12 @@
 <body>
 <main>
   <h1>Arbitrage Scanner</h1>
-  <p class="subtitle">Cross-exchange &amp; triangular opportunity detection · paper trading only, no real orders</p>
+  <p class="subtitle">Cross-exchange &amp; triangular arbitrage + funding-rate carry · paper trading only, no real orders</p>
   <div id="mockBanner" class="banner">Mock mode — prices are synthetic. Opportunities and P&amp;L shown here demonstrate the pipeline, not a real edge.</div>
 
   <div class="tiles">
     <div class="tile"><div class="label">Paper P&amp;L</div><div class="value" id="pnl">–</div><div class="detail" id="pnlDetail"></div></div>
+    <div class="tile"><div class="label">Carry P&amp;L</div><div class="value" id="carryPnl">–</div><div class="detail" id="carryDetail">funding-rate carry</div></div>
     <div class="tile"><div class="label">Opportunities seen</div><div class="value" id="oppCount">–</div><div class="detail">net edge &gt; 0 after fees</div></div>
     <div class="tile"><div class="label">Paper trades</div><div class="value" id="tradeCount">–</div><div class="detail" id="tradeDetail"></div></div>
     <div class="tile"><div class="label">Quotes / sec</div><div class="value" id="qps">–</div><div class="detail" id="qTotal"></div></div>
@@ -141,6 +142,16 @@
       <div class="tooltip" id="pnlTip"></div>
       <div class="empty" id="pnlEmpty">No paper trades yet — the chart appears after the first simulated fill.</div>
     </div>
+  </section>
+
+  <section>
+    <h2>Funding-rate carry (long spot + short perp, collects funding around the clock)</h2>
+    <div id="carryPosition" class="empty"></div>
+    <div class="scroll"><table id="fundingTable">
+      <thead><tr><th>Exchange</th><th>Perp</th><th class="num">Funding / interval</th><th class="num">Annualized</th><th class="num">Next funding</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="empty" id="fundingEmpty">Waiting for the first funding-rate poll…</div>
   </section>
 
   <section>
@@ -268,6 +279,31 @@ function render(s) {
   $('qTotal').textContent = `${s.totalQuotes.toLocaleString()} total`
   $('uptime').textContent = fmtUptime(s.now - s.startedAt)
   $('startedAt').textContent = 'since ' + fmtTime(s.startedAt)
+
+  const fu = s.funding || {}
+  const carryEl = $('carryPnl')
+  const total = fu.totalPnl ?? 0
+  carryEl.textContent = fmtUsd(total)
+  carryEl.className = 'value ' + (total > 0 ? 'pos' : total < 0 ? 'neg' : '')
+  $('carryDetail').textContent = fu.position
+    ? `position open on ${fu.position.symbol}`
+    : 'no open position'
+  const p = fu.position
+  $('carryPosition').innerHTML = p
+    ? `Open: short <strong>${esc(p.symbol)}</strong> perp on ${esc(p.exchange)} vs spot, ` +
+      `${fmtUsd(p.notional)} notional · entered at ${(p.entryAnnualized * 100).toFixed(1)}% APR ` +
+      `(now ${(p.currentAnnualized * 100).toFixed(1)}%) · accrued ${fmtUsd(p.accrued)} ` +
+      `− entry cost ${fmtUsd(p.entryCost)} = <strong>${fmtUsd(p.unrealizedPnl)}</strong>`
+    : `No open carry position — enters when the best positive funding exceeds ${((s.config.carryMinApr ?? 0.08) * 100).toFixed(0)}% APR.`
+  const rates = fu.rates || []
+  $('fundingEmpty').style.display = rates.length ? 'none' : 'block'
+  $('fundingTable').querySelector('tbody').innerHTML = rates.map((r) => {
+    const mins = r.nextFundingTime ? Math.max(0, Math.round((r.nextFundingTime - s.now) / 60000)) : null
+    return `<tr><td class="dim">${esc(r.exchange)}</td><td>${esc(r.symbol)}</td>` +
+      `<td class="num">${fmtBps(r.rate)}</td>` +
+      `<td class="num"><span class="${r.annualized > 0 ? 'pos' : ''}">${(r.annualized * 100).toFixed(1)}%</span></td>` +
+      `<td class="num">${mins === null ? '–' : mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm'}</td></tr>`
+  }).join('')
 
   $('feedChips').innerHTML = s.feeds.map((f) => {
     const up = f.connected
