@@ -1,5 +1,7 @@
 import { config } from '../config.js'
 
+const fmtPrice = (v) => (v >= 100 ? v.toFixed(2) : v.toPrecision(6))
+
 // Cross-exchange spot arbitrage: buy at the exchange with the lowest ask,
 // sell at the exchange with the highest bid, both legs simultaneously.
 // Assumes inventory is pre-funded on every venue (no per-trade transfers).
@@ -60,8 +62,8 @@ export class CrossExchangeStrategy {
       key: `xex:${group.name}:${best.buy.exchange}>${best.sell.exchange}`,
       asset: group.name,
       description:
-        `Buy ${group.name} on ${best.buy.exchange} @ ${best.buy.ask} (${best.buy.symbol}), ` +
-        `sell on ${best.sell.exchange} @ ${best.sell.bid} (${best.sell.symbol})`,
+        `Buy ${group.name} on ${best.buy.exchange} @ ${fmtPrice(best.buy.ask)} (${best.buy.symbol}), ` +
+        `sell on ${best.sell.exchange} @ ${fmtPrice(best.sell.bid)} (${best.sell.symbol})`,
       grossEdge: best.grossEdge,
       netEdge: best.netEdge,
       maxNotional,
