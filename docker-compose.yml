@@ -1,0 +1,14 @@
+services:
+  scanner:
+    build: .
+    container_name: arb-scanner
+    restart: unless-stopped
+    # Dashboard reachable only from the host machine; use an SSH or
+    # Cloudflare tunnel to view it remotely instead of opening the port.
+    ports:
+      - "127.0.0.1:5000:5000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data

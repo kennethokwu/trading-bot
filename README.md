@@ -56,6 +56,22 @@ feeds that occasionally inject dislocations:
 npm run start:mock
 ```
 
+### Docker (one-command deploy)
+
+On any machine or VPS with Docker installed:
+
+```bash
+docker compose up -d --build
+```
+
+The scanner runs with `restart: unless-stopped`, so it survives crashes and
+reboots. The dashboard is published on `127.0.0.1:5000` (host-only by
+design); view it remotely through an SSH tunnel
+(`ssh -L 5000:localhost:5000 your-server`) or a Cloudflare Tunnel rather
+than exposing the port. The JSONL logs persist in `./data` on the host.
+Configuration works the same way: put a `.env` next to the compose file.
+Logs: `docker logs -f arb-scanner`.
+
 ## Configuration
 
 Everything is tuned via `.env` (see `.env.example`): fee tiers per exchange,
